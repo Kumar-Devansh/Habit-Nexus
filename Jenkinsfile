@@ -66,11 +66,20 @@ pipeline {
                         script: 'git rev-parse --short HEAD',
                         returnStdout: true
                     ).trim()
+                    env.DOCKER_IMAGE_NAME = params.DOCKER_IMAGE?.trim()
+                        ? params.DOCKER_IMAGE.trim()
+                        : 'devansh0111/habitnexus'
                     env.IMAGE_TAG = params.DOCKER_TAG?.trim()
                         ? params.DOCKER_TAG.trim()
                         : "${env.BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
+                    env.WEB_PORT_VALUE = params.WEB_PORT?.trim()
+                        ? params.WEB_PORT.trim()
+                        : '8000'
+                    env.PUSH_LATEST_VALUE = (
+                        params.PUSH_LATEST == null ? true : params.PUSH_LATEST
+                    ).toString()
                     echo "Git commit: ${env.GIT_COMMIT_SHORT}"
-                    echo "Docker image: ${params.DOCKER_IMAGE}:${env.IMAGE_TAG}"
+                    echo "Docker image: ${env.DOCKER_IMAGE_NAME}:${env.IMAGE_TAG}"
                 }
             }
         }
@@ -91,8 +100,8 @@ DEVELOPER_EMAILS=${DEVELOPER_EMAILS:-}
 POSTGRES_DB=${POSTGRES_DB:-habitnexus}
 POSTGRES_USER=${POSTGRES_USER:-habitnexus_user}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-WEB_PORT=${WEB_PORT}
-DOCKER_IMAGE=${DOCKER_IMAGE}
+WEB_PORT=${WEB_PORT_VALUE}
+DOCKER_IMAGE=${DOCKER_IMAGE_NAME}
 DOCKER_TAG=${IMAGE_TAG}
 DB_POOL_MIN=${DB_POOL_MIN:-1}
 DB_POOL_MAX=${DB_POOL_MAX:-5}
@@ -113,7 +122,7 @@ EOF
                 sh '''
                     set -eu
                     docker compose build web
-                    docker image inspect "${DOCKER_IMAGE}:${IMAGE_TAG}" >/dev/null
+                    docker image inspect "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}" >/dev/null
                 '''
             }
         }
@@ -139,10 +148,10 @@ EOF
                     sh '''
                         set -eu
                         echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
-                        docker push "${DOCKER_IMAGE}:${IMAGE_TAG}"
-                        if [ "${PUSH_LATEST}" = "true" ]; then
-                            docker tag "${DOCKER_IMAGE}:${IMAGE_TAG}" "${DOCKER_IMAGE}:latest"
-                            docker push "${DOCKER_IMAGE}:latest"
+                        docker push "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}"
+                        if [ "${PUSH_LATEST_VALUE}" = "true" ]; then
+                            docker tag "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}" "${DOCKER_IMAGE_NAME}:latest"
+                            docker push "${DOCKER_IMAGE_NAME}:latest"
                         fi
                         docker logout
                     '''
@@ -171,7 +180,7 @@ EOF
                 sendBuildEmail(
                     'HabitNexus deployment succeeded',
                     '#90EE90',
-                    "Docker image: ${params.DOCKER_IMAGE}:${env.IMAGE_TAG}"
+                    "Docker image: ${env.DOCKER_IMAGE_NAME}:${env.IMAGE_TAG}"
                 )
             }
         }

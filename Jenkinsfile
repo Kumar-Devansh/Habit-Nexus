@@ -114,7 +114,7 @@ pipeline {
             }
             steps {
                 script {
-                    scanImageWithTrivyy()
+                    scanImageWithTrivy()
                 }
             }
         }

@@ -14,7 +14,7 @@ pipeline {
     parameters {
         string(
             name: 'DOCKER_IMAGE',
-            defaultValue: 'devansh0111/habitnexus'
+            defaultValue: 'devansh0111/habitnexus',
             description: 'DockerHub image name, for example: dockerhub-username/habitnexus'
         )
         string(
@@ -114,7 +114,7 @@ pipeline {
             }
             steps {
                 script {
-                    scanImageWithTrivy()
+                    scanImageWithTrivyy()
                 }
             }
         }

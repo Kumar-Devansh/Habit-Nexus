@@ -32,6 +32,21 @@ pipeline {
             defaultValue: true,
             description: 'Deploy with Docker Compose after a successful build.'
         )
+        booleanParam(
+            name: 'RUN_TRIVY_SCAN',
+            defaultValue: true,
+            description: 'Scan the Docker image with Trivy before pushing to DockerHub.'
+        )
+        string(
+            name: 'TRIVY_SEVERITY',
+            defaultValue: 'HIGH,CRITICAL',
+            description: 'Comma-separated severities that Trivy should report.'
+        )
+        string(
+            name: 'TRIVY_EXIT_CODE',
+            defaultValue: '1',
+            description: 'Use 1 to fail on findings, or 0 to only report findings.'
+        )
         string(
             name: 'WEB_PORT',
             defaultValue: '8000',
@@ -78,6 +93,12 @@ pipeline {
                     env.PUSH_LATEST_VALUE = (
                         params.PUSH_LATEST == null ? true : params.PUSH_LATEST
                     ).toString()
+                    env.TRIVY_SEVERITY_VALUE = params.TRIVY_SEVERITY?.trim()
+                        ? params.TRIVY_SEVERITY.trim()
+                        : 'HIGH,CRITICAL'
+                    env.TRIVY_EXIT_CODE_VALUE = params.TRIVY_EXIT_CODE?.trim()
+                        ? params.TRIVY_EXIT_CODE.trim()
+                        : '1'
                     echo "Git commit: ${env.GIT_COMMIT_SHORT}"
                     echo "Docker image: ${env.DOCKER_IMAGE_NAME}:${env.IMAGE_TAG}"
                 }
@@ -132,6 +153,26 @@ EOF
                 sh '''
                     set -eu
                     docker compose run --rm --no-deps web python -m py_compile app.py database.py
+                '''
+            }
+        }
+
+        stage('Security: Trivy Image Scan') {
+            when {
+                expression { return params.RUN_TRIVY_SCAN }
+            }
+            steps {
+                sh '''
+                    set -eu
+                    docker run --rm \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v trivy_cache:/root/.cache \
+                        aquasec/trivy:latest image \
+                        --no-progress \
+                        --ignore-unfixed \
+                        --severity "${TRIVY_SEVERITY_VALUE}" \
+                        --exit-code "${TRIVY_EXIT_CODE_VALUE}" \
+                        "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}"
                 '''
             }
         }

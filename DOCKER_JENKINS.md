@@ -118,6 +118,8 @@ Install these on the Jenkins host:
 - Git
 - Jenkins credentials plugin
 
+Trivy runs through the `aquasec/trivy:latest` Docker image, so you do not need to install Trivy directly on the Jenkins host.
+
 Give Jenkins permission to use Docker:
 
 ```bash
@@ -148,9 +150,10 @@ The pipeline will:
 2. Write `.env` from Jenkins credentials.
 3. Build a Docker image.
 4. Run a Python compile smoke check.
-5. Push the image to DockerHub.
-6. Start/update containers with `docker compose up -d`.
-7. Run `init_db()` inside the web container.
+5. Scan the Docker image with Trivy.
+6. Push the image to DockerHub.
+7. Start/update containers with `docker compose up -d`.
+8. Run `init_db()` inside the web container.
 
 Default image:
 
@@ -181,8 +184,13 @@ Each build has these parameters:
 - `DOCKER_TAG`: optional manual tag. Leave blank to use `BUILD_NUMBER-shortGitCommit`.
 - `PUSH_LATEST`: also push `latest`.
 - `DEPLOY_APP`: deploy with Docker Compose after pushing.
+- `RUN_TRIVY_SCAN`: scan the image before pushing.
+- `TRIVY_SEVERITY`: default `HIGH,CRITICAL`.
+- `TRIVY_EXIT_CODE`: default `1`, which fails the build when matching vulnerabilities are found. Use `0` to report only.
 - `WEB_PORT`: host port, usually `8000`.
 - `EMAIL_TO`: email for Jenkins notifications.
+
+If Trivy fails the build, check the Jenkins console output. For temporary learning/testing, set `TRIVY_EXIT_CODE=0`; for real production, keep it as `1`.
 
 ## 7. Common Commands
 

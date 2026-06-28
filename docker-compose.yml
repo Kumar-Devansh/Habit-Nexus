@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: habitnexus-web:latest
+    image: ${DOCKER_IMAGE:-habitnexus-web}:${DOCKER_TAG:-latest}
     restart: unless-stopped
     env_file:
       - .env

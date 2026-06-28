@@ -1,144 +1,69 @@
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+# HabitNexus
 
-# 🚀 Habit Nexus
+HabitNexus is a Flask habit tracking application for students and developers. It supports daily routines, progress analytics, DSA tracking, friend features, developer notifications, and PostgreSQL-backed production deployment.
 
-<div align="center">
+## Current Deployment Stack
 
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Flask](https://img.shields.io/badge/Flask-Web%20Framework-000000?style=for-the-badge&logo=flask&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
-![Gunicorn](https://img.shields.io/badge/Gunicorn-WSGI-499848?style=for-the-badge)
-![Nginx](https://img.shields.io/badge/Nginx-Reverse%20Proxy-009639?style=for-the-badge&logo=nginx&logoColor=white)
-![AWS EC2](https://img.shields.io/badge/AWS-EC2-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)
-
-**A Production-Ready Habit Tracking Web Application**
-
-Build habits • Track progress • Stay consistent
-
-</div>
-
----
-
-# 📖 Overview
-
-Habit Nexus is a production-ready habit tracking platform developed using **Flask**, **PostgreSQL**, and **Gunicorn**, deployed on an **AWS EC2 Ubuntu Server** behind **Nginx**.
-
-The application enables users to create habits, maintain daily routines, monitor consistency, and visualize progress through an intuitive interface. The deployment follows industry-standard practices including process management with **systemd**, reverse proxy configuration using **Nginx**, environment variable management, and PostgreSQL database integration.
-
----
-
-# ✨ Features
-
-- 🔐 Secure User Authentication
-- 📅 Daily Habit Tracking
-- 📈 Progress Analytics
-- 🎯 Routine Management
-- 🗂 PostgreSQL Database
-- ⚡ Gunicorn Production Server
-- 🌐 Nginx Reverse Proxy
-- 🔄 Systemd Service Management
-- 🔒 Environment Variable Configuration
-- ☁ AWS EC2 Deployment
-- 🚀 Production Ready Architecture
-
----
-
-# 🛠 Tech Stack
-
-| Category | Technology |
-|----------|------------|
+| Layer | Tool |
+| --- | --- |
 | Backend | Flask |
-| Language | Python |
+| App server | Gunicorn |
 | Database | PostgreSQL |
-| ORM | psycopg2 |
-| WSGI Server | Gunicorn |
-| Reverse Proxy | Nginx |
-| Process Manager | systemd |
+| Container runtime | Docker |
+| Local orchestration | Docker Compose |
+| Reverse proxy | Nginx |
+| CI/CD | Jenkins |
+| Image registry | DockerHub |
+| Image security scan | Trivy |
 | Server | AWS EC2 Ubuntu |
-| Version Control | Git |
-| Environment | Python Virtual Environment |
 
----
+## Architecture
 
-# 🏗 Production Architecture
-
-```
-                    Internet
-                        │
-                        ▼
-                  Nginx (Port 80)
-                        │
-                        ▼
-           Gunicorn (127.0.0.1:8000)
-                        │
-                        ▼
-                 Flask Application
-                        │
-                        ▼
-                 PostgreSQL Database
+```text
+Internet
+  -> Nginx :80/:443
+  -> Docker published port :8000
+  -> Gunicorn + Flask web container
+  -> PostgreSQL container
 ```
 
----
+Jenkins builds the app image, runs a Python compile smoke check, scans the image with Trivy, pushes the image to DockerHub, and deploys the app with Docker Compose.
 
-# 📂 Project Structure
+## Project Structure
 
-```
+```text
 Habit_Nexus/
-│
-├── app.py
-├── database.py
-├── requirements.txt
-├── .env
-├── venv/
-├── templates/
-├── static/
-├── instance/
-├── migrations/
-└── README.md
+  app.py
+  database.py
+  requirements.txt
+  Dockerfile
+  docker-compose.yml
+  Jenkinsfile
+  DOCKER_JENKINS.md
+  PRODUCTION.md
+  templates/
+  static/
+  scripts/
 ```
 
----
+## Environment Variables
 
-# ⚙ Deployment Workflow
-
-## 1. Clone Repository
-
-```bash
-git clone https://github.com/Kumar-Devansh/Habit_Nexus.git
-cd Habit_Nexus
-```
-
----
-
-## 2. Create Virtual Environment
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
----
-
-## 3. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-pip install gunicorn psycopg2-binary
-```
-
----
-
-## 4. Configure Environment Variables
-
-Create a `.env` file.
-
-Example:
+Create `.env` on the EC2 server. Do not commit real secrets.
 
 ```env
-SECRET_KEY=your_secret_key
+APP_ENV=production
+SECRET_KEY=replace-with-a-long-random-secret
+SESSION_COOKIE_SECURE=0
+DEVELOPER_EMAILS=your-admin-email@example.com
 
-DATABASE_URL=postgresql://username:password@localhost/database
-DATABASE_SSLMODE=prefer
+POSTGRES_DB=habitnexus
+POSTGRES_USER=habitnexus_user
+POSTGRES_PASSWORD=replace-with-a-strong-db-password
+WEB_PORT=8000
+
+DOCKER_IMAGE=devansh0111/habitnexus
+DOCKER_TAG=latest
+
 DB_POOL_MIN=1
 DB_POOL_MAX=5
 DB_CONNECT_TIMEOUT=5
@@ -147,289 +72,205 @@ DB_KEEPALIVES_IDLE=30
 DB_KEEPALIVES_INTERVAL=10
 DB_KEEPALIVES_COUNT=5
 DB_POOL_HEALTH_CHECK_ATTEMPTS=2
-
-SESSION_COOKIE_SECURE=False
 ```
 
----
+Keep `SESSION_COOKIE_SECURE=0` while testing with `http://YOUR_EC2_IP`. Change it to `1` only after HTTPS is configured.
 
-## 5. Initialize Database
+## Run With Docker Compose
+
+Build and start:
 
 ```bash
-python3 -c "from database import init_db; init_db()"
+docker compose build
+docker compose up -d
 ```
 
----
-
-## 6. Run Development Server
+Initialize database tables after the first start:
 
 ```bash
-python app.py
+docker compose exec web python -c "from database import init_db; init_db()"
 ```
 
----
-
-## 7. Run Production Server
+Check status and logs:
 
 ```bash
-gunicorn app:app --workers 2 --threads 4 --bind 127.0.0.1:8000 --timeout 120 --access-logfile -
+docker compose ps
+docker compose logs -f web
+docker compose logs -f db
 ```
 
----
-
-# 🚀 Production Deployment
-
-The project is deployed using:
-
-- Ubuntu Server
-- AWS EC2
-- PostgreSQL
-- Gunicorn
-- Nginx
-- systemd
-
----
-
-# ⚡ Systemd Service
-
-Example service:
-
-```ini
-[Unit]
-Description=Habit Nexus
-
-[Service]
-User=ubuntu
-WorkingDirectory=/home/ubuntu/Habit_Nexus
-EnvironmentFile=/home/ubuntu/Habit_Nexus/.env
-ExecStart=/home/ubuntu/Habit_Nexus/venv/bin/gunicorn app:app --workers 2 --threads 4 --bind 127.0.0.1:8000 --timeout 120 --access-logfile -
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable service
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable habitnexus
-sudo systemctl start habitnexus
-```
-
----
-
-# 🌐 Nginx Configuration
-
-```nginx
-server {
-
-    listen 80;
-
-    server_name YOUR_PUBLIC_IP;
-
-    location / {
-
-        proxy_pass http://127.0.0.1:8000;
-
-        proxy_set_header Host $host;
-
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-    }
-
-}
-```
-
-Restart nginx
-
-```bash
-sudo nginx -t
-sudo systemctl restart nginx
-```
-
----
-
-# 🗄 PostgreSQL Setup
-
-Initialize PostgreSQL
-
-```bash
-sudo -u postgres psql
-```
-
-Verify Database Connection
-
-```bash
-echo $DATABASE_URL
-
-psql "$DATABASE_URL"
-```
-
-Initialize tables
-
-```bash
-python3 -c "from database import init_db; init_db()"
-```
-
----
-
-# 🔍 Monitoring & Debugging
-
-## Gunicorn
-
-```bash
-ps -ef | grep gunicorn
-
-sudo pkill gunicorn
-```
-
----
-
-## systemd Logs
-
-```bash
-sudo journalctl -u habitnexus -f
-```
-
----
-
-## Check Service Status
-
-```bash
-sudo systemctl status habitnexus
-```
-
----
-
-## Check Listening Ports
-
-```bash
-sudo ss -tulpn | grep 8000
-```
-
----
-
-## Verify Nginx
-
-```bash
-sudo nginx -t
-```
-
----
-
-## Test Backend
+Test locally on EC2:
 
 ```bash
 curl http://127.0.0.1:8000
 ```
 
----
+## Nginx Reverse Proxy
 
-## Test Reverse Proxy
+Use Nginx on port `80` and proxy to the Docker app port:
 
-```bash
-curl http://127.0.0.1
+```nginx
+server {
+    listen 80;
+    server_name YOUR_DOMAIN_OR_PUBLIC_IP;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
 ```
 
----
-
-# 💻 Useful Commands
-
-Activate Virtual Environment
+Reload Nginx:
 
 ```bash
-source venv/bin/activate
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
-Pull Latest Changes
+## Jenkins CI/CD
+
+The pipeline is defined in `Jenkinsfile`.
+
+Required Jenkins credentials:
+
+| ID | Kind | Purpose |
+| --- | --- | --- |
+| `habitnexus-secret-key` | Secret text | Flask `SECRET_KEY` |
+| `habitnexus-postgres-password` | Secret text | PostgreSQL password |
+| `dockerhub-credentials` | Username with password | DockerHub username and access token |
+
+Pipeline stages:
+
+```text
+Workspace: Cleanup
+Git: Checkout Source
+Config: Prepare Runtime Environment
+Docker: Build Image
+Verify: Python Compile Check
+Security: Trivy Image Scan
+DockerHub: Push Image
+Deploy: Docker Compose
+```
+
+Default DockerHub image:
+
+```text
+devansh0111/habitnexus
+```
+
+The pipeline creates tags like:
+
+```text
+BUILD_NUMBER-shortGitCommit
+latest
+```
+
+Example:
+
+```text
+devansh0111/habitnexus:18-a1b2c3d
+devansh0111/habitnexus:latest
+```
+
+Jenkins parameters:
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| `DOCKER_IMAGE` | `devansh0111/habitnexus` | DockerHub image name |
+| `DOCKER_TAG` | blank | Optional manual tag |
+| `PUSH_LATEST` | true | Also push `latest` |
+| `DEPLOY_APP` | true | Deploy after build |
+| `RUN_TRIVY_SCAN` | true | Run Trivy before push/deploy |
+| `TRIVY_SEVERITY` | `HIGH,CRITICAL` | Vulnerability severities to report |
+| `TRIVY_EXIT_CODE` | `1` | Fail build on matching findings |
+| `WEB_PORT` | `8000` | Host port for app |
+| `EMAIL_TO` | project email | Notification recipient |
+
+For details, see [DOCKER_JENKINS.md](DOCKER_JENKINS.md).
+
+## Trivy
+
+Trivy runs through Docker:
+
+```text
+aquasec/trivy:latest
+```
+
+No direct Trivy install is required on Jenkins. In production, keep:
+
+```text
+TRIVY_EXIT_CODE=1
+```
+
+For temporary testing, use:
+
+```text
+TRIVY_EXIT_CODE=0
+```
+
+This reports vulnerabilities without failing the build.
+
+## Useful Commands
+
+Restart the app:
 
 ```bash
-git pull
+docker compose restart web
 ```
 
-Restart Application
+Rebuild and deploy:
 
 ```bash
-sudo systemctl restart habitnexus
+docker compose up -d --build
 ```
 
-Restart Nginx
+Stop containers without deleting database data:
 
 ```bash
-sudo systemctl restart nginx
+docker compose down
 ```
 
-View Logs
+Check port `8000`:
 
 ```bash
-sudo journalctl -u habitnexus -f
+sudo ss -ltnp | grep :8000
 ```
 
-Check Disk
+Backup PostgreSQL:
 
 ```bash
-df -h
+docker compose exec db pg_dump -U habitnexus_user habitnexus > habitnexus_backup.sql
 ```
 
-Check RAM
+Restore PostgreSQL:
 
 ```bash
-free -h
+docker compose exec -T db psql -U habitnexus_user habitnexus < habitnexus_backup.sql
 ```
 
----
+## Manual Production Notes
 
-# 🔐 Security Practices
+Manual Gunicorn/systemd deployment is documented in [PRODUCTION.md](PRODUCTION.md). The recommended deployment path for this project is now Docker Compose with Jenkins automation.
 
-- Environment variables stored in `.env`
-- PostgreSQL authentication
-- Gunicorn bound to localhost only
-- Nginx reverse proxy
-- systemd process isolation
-- Secret key management
-- Session security configuration
+## Security Notes
 
----
+- Do not commit `.env`.
+- Use Jenkins credentials for secrets.
+- Use a DockerHub access token, not your DockerHub account password.
+- Keep `SESSION_COOKIE_SECURE=0` only for plain HTTP testing.
+- Switch `SESSION_COOKIE_SECURE=1` after HTTPS is active.
+- Keep Trivy enabled before pushing/deploying images.
 
-# 📚 Skills Demonstrated
+## Author
 
-- Flask Development
-- PostgreSQL Integration
-- Production Deployment
-- Linux Administration
-- AWS EC2
-- Gunicorn Configuration
-- Nginx Reverse Proxy
-- systemd Services
-- Environment Management
-- Debugging Production Servers
-- Linux Networking
-- Git Workflow
-- Secure Deployment Practices
+Kumar Devansh
 
----
+GitHub: <https://github.com/Kumar-Devansh>
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-# 👨‍💻 Author
-
-** Kumar Devansh **
-
-GitHub
-
-https://github.com/Kumar-Devansh
-
----
-
-# ⭐ Support
-
-If you found this project helpful, consider giving it a ⭐ on GitHub.
-
-It helps others discover the project and motivates future improvements.
-
----
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

@@ -129,6 +129,7 @@ Create Jenkins credentials:
 
 - `habitnexus-secret-key`: Secret text containing your Flask `SECRET_KEY`.
 - `habitnexus-postgres-password`: Secret text containing your Postgres password.
+- `dockerhub-credentials`: Username with password. Use your DockerHub username and a DockerHub access token.
 
 Create a Pipeline job:
 
@@ -144,13 +145,46 @@ Create a Pipeline job:
 The pipeline will:
 
 1. Checkout code.
-2. Build the Docker image.
-3. Run a Python compile smoke check.
-4. Write `.env` from Jenkins credentials.
-5. Start/update containers with `docker compose up -d`.
-6. Run `init_db()` inside the web container.
+2. Write `.env` from Jenkins credentials.
+3. Build a Docker image.
+4. Run a Python compile smoke check.
+5. Push the image to DockerHub.
+6. Start/update containers with `docker compose up -d`.
+7. Run `init_db()` inside the web container.
 
-## 6. Common Commands
+Default image:
+
+```text
+devansh0111/habitnexus
+```
+
+Change the `DOCKER_IMAGE` Jenkins parameter if your DockerHub repository uses a different name.
+
+The pipeline creates a build tag automatically:
+
+```text
+BUILD_NUMBER-shortGitCommit
+```
+
+Example:
+
+```text
+devansh0111/habitnexus:18-a1b2c3d
+devansh0111/habitnexus:latest
+```
+
+## 6. Jenkins Parameters
+
+Each build has these parameters:
+
+- `DOCKER_IMAGE`: DockerHub image name, for example `devansh0111/habitnexus`.
+- `DOCKER_TAG`: optional manual tag. Leave blank to use `BUILD_NUMBER-shortGitCommit`.
+- `PUSH_LATEST`: also push `latest`.
+- `DEPLOY_APP`: deploy with Docker Compose after pushing.
+- `WEB_PORT`: host port, usually `8000`.
+- `EMAIL_TO`: email for Jenkins notifications.
+
+## 7. Common Commands
 
 Restart:
 

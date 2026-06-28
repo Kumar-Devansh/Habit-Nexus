@@ -2,6 +2,9 @@
 
 HabitNexus is a Flask habit tracking application for students and developers. It supports daily routines, progress analytics, DSA tracking, friend features, developer notifications, and PostgreSQL-backed production deployment.
 
+<img width="2752" height="1536" alt="Gemini_Generated_Image_pft39vpft39vpft3" src="https://github.com/user-attachments/assets/a394bef7-b6e1-45a2-b762-799425f8ad3d" />
+
+
 ## Current Deployment Stack
 
 | Layer | Tool |

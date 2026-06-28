@@ -40,10 +40,18 @@ from werkzeug.security import (
     generate_password_hash,
     check_password_hash
 )
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import os
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_for=1,
+    x_proto=1,
+    x_host=1,
+    x_prefix=1,
+)
 
 configured_secret = os.environ.get("SECRET_KEY")
 if os.environ.get("APP_ENV") == "production" and not configured_secret:

@@ -31,7 +31,7 @@ Create `.env` on EC2. Do not commit this file.
 ```env
 APP_ENV=production
 SECRET_KEY=replace-with-a-long-random-secret
-SESSION_COOKIE_SECURE=1
+SESSION_COOKIE_SECURE=0
 DEVELOPER_EMAILS=devanshup1312@gmail.com
 
 POSTGRES_DB=habitnexus
@@ -48,6 +48,9 @@ DB_KEEPALIVES_INTERVAL=10
 DB_KEEPALIVES_COUNT=5
 DB_POOL_HEALTH_CHECK_ATTEMPTS=2
 ```
+
+Keep `SESSION_COOKIE_SECURE=0` while you are opening the site with `http://YOUR_EC2_IP`.
+After you add HTTPS/SSL, change it to `SESSION_COOKIE_SECURE=1`.
 
 `docker-compose.yml` builds `DATABASE_URL` automatically from the Postgres values above:
 

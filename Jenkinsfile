@@ -67,93 +67,44 @@ pipeline {
     }
 
     stages {
-        stage('Workspace Cleanup') {
+        stage('Workspace: Cleanup') {
             steps {
-                deleteDir()
-            }
-        }
-
-        stage('Git: Code Checkout') {
-            steps {
-                checkout scm
                 script {
-                    env.GIT_COMMIT_SHORT = sh(
-                        script: 'git rev-parse --short HEAD',
-                        returnStdout: true
-                    ).trim()
-                    env.DOCKER_IMAGE_NAME = params.DOCKER_IMAGE?.trim()
-                        ? params.DOCKER_IMAGE.trim()
-                        : 'devansh0111/habitnexus'
-                    env.IMAGE_TAG = params.DOCKER_TAG?.trim()
-                        ? params.DOCKER_TAG.trim()
-                        : "${env.BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
-                    env.WEB_PORT_VALUE = params.WEB_PORT?.trim()
-                        ? params.WEB_PORT.trim()
-                        : '8000'
-                    env.PUSH_LATEST_VALUE = (
-                        params.PUSH_LATEST == null ? true : params.PUSH_LATEST
-                    ).toString()
-                    env.TRIVY_SEVERITY_VALUE = params.TRIVY_SEVERITY?.trim()
-                        ? params.TRIVY_SEVERITY.trim()
-                        : 'HIGH,CRITICAL'
-                    env.TRIVY_EXIT_CODE_VALUE = params.TRIVY_EXIT_CODE?.trim()
-                        ? params.TRIVY_EXIT_CODE.trim()
-                        : '1'
-                    echo "Git commit: ${env.GIT_COMMIT_SHORT}"
-                    echo "Docker image: ${env.DOCKER_IMAGE_NAME}:${env.IMAGE_TAG}"
+                    cleanWorkspace()
                 }
             }
         }
 
-        stage('Prepare: Runtime Environment') {
+        stage('Git: Checkout Source') {
             steps {
-                withCredentials([
-                    string(credentialsId: env.SECRET_KEY_CREDENTIALS_ID, variable: 'SECRET_KEY'),
-                    string(credentialsId: env.POSTGRES_PASSWORD_CREDENTIALS_ID, variable: 'POSTGRES_PASSWORD')
-                ]) {
-                    sh '''
-                        set -eu
-                        cat > .env <<EOF
-APP_ENV=production
-SECRET_KEY=${SECRET_KEY}
-SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-0}
-DEVELOPER_EMAILS=${DEVELOPER_EMAILS:-}
-POSTGRES_DB=${POSTGRES_DB:-habitnexus}
-POSTGRES_USER=${POSTGRES_USER:-habitnexus_user}
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-WEB_PORT=${WEB_PORT_VALUE}
-DOCKER_IMAGE=${DOCKER_IMAGE_NAME}
-DOCKER_TAG=${IMAGE_TAG}
-DB_POOL_MIN=${DB_POOL_MIN:-1}
-DB_POOL_MAX=${DB_POOL_MAX:-5}
-DB_CONNECT_TIMEOUT=${DB_CONNECT_TIMEOUT:-5}
-DB_KEEPALIVES=${DB_KEEPALIVES:-1}
-DB_KEEPALIVES_IDLE=${DB_KEEPALIVES_IDLE:-30}
-DB_KEEPALIVES_INTERVAL=${DB_KEEPALIVES_INTERVAL:-10}
-DB_KEEPALIVES_COUNT=${DB_KEEPALIVES_COUNT:-5}
-DB_POOL_HEALTH_CHECK_ATTEMPTS=${DB_POOL_HEALTH_CHECK_ATTEMPTS:-2}
-EOF
-                    '''
+                script {
+                    checkoutSourceCode()
+                    prepareBuildMetadata()
+                }
+            }
+        }
+
+        stage('Config: Prepare Runtime Environment') {
+            steps {
+                script {
+                    writeRuntimeEnvironmentFile()
                 }
             }
         }
 
         stage('Docker: Build Image') {
             steps {
-                sh '''
-                    set -eu
-                    docker compose build web
-                    docker image inspect "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}" >/dev/null
-                '''
+                script {
+                    buildDockerImage()
+                }
             }
         }
 
-        stage('Verify: Static Smoke Check') {
+        stage('Verify: Python Compile Check') {
             steps {
-                sh '''
-                    set -eu
-                    docker compose run --rm --no-deps web python -m py_compile app.py database.py
-                '''
+                script {
+                    runPythonCompileCheck()
+                }
             }
         }
 
@@ -162,40 +113,16 @@ EOF
                 expression { return params.RUN_TRIVY_SCAN }
             }
             steps {
-                sh '''
-                    set -eu
-                    docker run --rm \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v trivy_cache:/root/.cache \
-                        aquasec/trivy:latest image \
-                        --no-progress \
-                        --ignore-unfixed \
-                        --severity "${TRIVY_SEVERITY_VALUE}" \
-                        --exit-code "${TRIVY_EXIT_CODE_VALUE}" \
-                        "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}"
-                '''
+                script {
+                    scanImageWithTrivy()
+                }
             }
         }
 
         stage('DockerHub: Push Image') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: env.DOCKERHUB_CREDENTIALS_ID,
-                        usernameVariable: 'DOCKERHUB_USERNAME',
-                        passwordVariable: 'DOCKERHUB_TOKEN'
-                    )
-                ]) {
-                    sh '''
-                        set -eu
-                        echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
-                        docker push "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}"
-                        if [ "${PUSH_LATEST_VALUE}" = "true" ]; then
-                            docker tag "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}" "${DOCKER_IMAGE_NAME}:latest"
-                            docker push "${DOCKER_IMAGE_NAME}:latest"
-                        fi
-                        docker logout
-                    '''
+                script {
+                    pushImageToDockerHub()
                 }
             }
         }
@@ -205,12 +132,9 @@ EOF
                 expression { return params.DEPLOY_APP }
             }
             steps {
-                sh '''
-                    set -eu
-                    docker compose up -d --remove-orphans
-                    docker compose exec -T web python -c "from database import init_db; init_db()"
-                    docker compose ps
-                '''
+                script {
+                    deployWithDockerCompose()
+                }
             }
         }
     }
@@ -235,9 +159,150 @@ EOF
             }
         }
         always {
-            sh 'docker compose ps || true'
+            script {
+                showComposeStatus()
+            }
         }
     }
+}
+
+def cleanWorkspace() {
+    deleteDir()
+}
+
+def checkoutSourceCode() {
+    checkout scm
+}
+
+def prepareBuildMetadata() {
+    env.GIT_COMMIT_SHORT = sh(
+        script: 'git rev-parse --short HEAD',
+        returnStdout: true
+    ).trim()
+
+    env.DOCKER_IMAGE_NAME = params.DOCKER_IMAGE?.trim()
+        ? params.DOCKER_IMAGE.trim()
+        : 'devansh0111/habitnexus'
+
+    env.IMAGE_TAG = params.DOCKER_TAG?.trim()
+        ? params.DOCKER_TAG.trim()
+        : "${env.BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
+
+    env.WEB_PORT_VALUE = params.WEB_PORT?.trim()
+        ? params.WEB_PORT.trim()
+        : '8000'
+
+    env.PUSH_LATEST_VALUE = (
+        params.PUSH_LATEST == null ? true : params.PUSH_LATEST
+    ).toString()
+
+    env.TRIVY_SEVERITY_VALUE = params.TRIVY_SEVERITY?.trim()
+        ? params.TRIVY_SEVERITY.trim()
+        : 'HIGH,CRITICAL'
+
+    env.TRIVY_EXIT_CODE_VALUE = params.TRIVY_EXIT_CODE?.trim()
+        ? params.TRIVY_EXIT_CODE.trim()
+        : '1'
+
+    echo 'Build metadata prepared'
+    echo "Git commit: ${env.GIT_COMMIT_SHORT}"
+    echo "Docker image: ${env.DOCKER_IMAGE_NAME}:${env.IMAGE_TAG}"
+    echo "Web port: ${env.WEB_PORT_VALUE}"
+}
+
+def writeRuntimeEnvironmentFile() {
+    withCredentials([
+        string(credentialsId: env.SECRET_KEY_CREDENTIALS_ID, variable: 'SECRET_KEY'),
+        string(credentialsId: env.POSTGRES_PASSWORD_CREDENTIALS_ID, variable: 'POSTGRES_PASSWORD')
+    ]) {
+        sh '''
+            set -eu
+            cat > .env <<EOF
+APP_ENV=production
+SECRET_KEY=${SECRET_KEY}
+SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-0}
+DEVELOPER_EMAILS=${DEVELOPER_EMAILS:-}
+POSTGRES_DB=${POSTGRES_DB:-habitnexus}
+POSTGRES_USER=${POSTGRES_USER:-habitnexus_user}
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+WEB_PORT=${WEB_PORT_VALUE}
+DOCKER_IMAGE=${DOCKER_IMAGE_NAME}
+DOCKER_TAG=${IMAGE_TAG}
+DB_POOL_MIN=${DB_POOL_MIN:-1}
+DB_POOL_MAX=${DB_POOL_MAX:-5}
+DB_CONNECT_TIMEOUT=${DB_CONNECT_TIMEOUT:-5}
+DB_KEEPALIVES=${DB_KEEPALIVES:-1}
+DB_KEEPALIVES_IDLE=${DB_KEEPALIVES_IDLE:-30}
+DB_KEEPALIVES_INTERVAL=${DB_KEEPALIVES_INTERVAL:-10}
+DB_KEEPALIVES_COUNT=${DB_KEEPALIVES_COUNT:-5}
+DB_POOL_HEALTH_CHECK_ATTEMPTS=${DB_POOL_HEALTH_CHECK_ATTEMPTS:-2}
+EOF
+        '''
+    }
+}
+
+def buildDockerImage() {
+    sh '''
+        set -eu
+        docker compose build web
+        docker image inspect "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}" >/dev/null
+    '''
+}
+
+def runPythonCompileCheck() {
+    sh '''
+        set -eu
+        docker compose run --rm --no-deps web python -m py_compile app.py database.py
+    '''
+}
+
+def scanImageWithTrivy() {
+    sh '''
+        set -eu
+        docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v trivy_cache:/root/.cache \
+            aquasec/trivy:latest image \
+            --no-progress \
+            --ignore-unfixed \
+            --severity "${TRIVY_SEVERITY_VALUE}" \
+            --exit-code "${TRIVY_EXIT_CODE_VALUE}" \
+            "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}"
+    '''
+}
+
+def pushImageToDockerHub() {
+    withCredentials([
+        usernamePassword(
+            credentialsId: env.DOCKERHUB_CREDENTIALS_ID,
+            usernameVariable: 'DOCKERHUB_USERNAME',
+            passwordVariable: 'DOCKERHUB_TOKEN'
+        )
+    ]) {
+        sh '''
+            set -eu
+            echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+            docker push "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}"
+            if [ "${PUSH_LATEST_VALUE}" = "true" ]; then
+                docker tag "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}" "${DOCKER_IMAGE_NAME}:latest"
+                docker push "${DOCKER_IMAGE_NAME}:latest"
+            fi
+            docker logout
+        '''
+    }
+}
+
+def deployWithDockerCompose() {
+    sh '''
+        set -eu
+        docker compose up -d --remove-orphans
+        docker compose exec -T web python -c "from database import init_db; init_db()"
+        docker compose ps
+    '''
+}
+
+def showComposeStatus() {
+    sh 'docker compose ps || true'
 }
 
 def sendBuildEmail(String subjectPrefix, String statusColor, String message) {

@@ -10,13 +10,23 @@ Required environment variables:
 APP_ENV=production
 SECRET_KEY=your-long-random-secret
 DATABASE_URL=postgresql://user:password@host:5432/database
-DATABASE_SSLMODE=require
+DATABASE_SSLMODE=prefer
 SESSION_COOKIE_SECURE=1
 DEVELOPER_EMAILS=your-admin-email@example.com
 DB_POOL_MIN=1
 DB_POOL_MAX=5
 DB_CONNECT_TIMEOUT=5
+DB_KEEPALIVES=1
+DB_KEEPALIVES_IDLE=30
+DB_KEEPALIVES_INTERVAL=10
+DB_KEEPALIVES_COUNT=5
+DB_POOL_HEALTH_CHECK_ATTEMPTS=2
 ```
+
+Use `DATABASE_SSLMODE=prefer` for PostgreSQL running on the same EC2 instance.
+Use `DATABASE_SSLMODE=require` for a managed database that requires SSL, such as many hosted PostgreSQL providers.
+
+`DB_POOL_MAX` is per Gunicorn worker process. With `--workers 2` and `DB_POOL_MAX=5`, the app can open up to 10 PostgreSQL connections.
 
 Install dependencies:
 

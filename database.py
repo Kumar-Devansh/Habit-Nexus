@@ -262,6 +262,38 @@ class PostgresConnection:
             self.connection.close()
 
 
+def initialize_postgres_pool():
+    return pool.ThreadedConnectionPool(
+        minconn=int(os.environ.get("DB_POOL_MIN", "1")),
+        maxconn=int(os.environ.get("DB_POOL_MAX", "5")),
+        dsn=DATABASE_URL,
+        connect_timeout=int(os.environ.get("DB_CONNECT_TIMEOUT", "5")),
+        sslmode=os.environ.get("DATABASE_SSLMODE", "prefer"),
+        keepalives=int(os.environ.get("DB_KEEPALIVES", "1")),
+        keepalives_idle=int(os.environ.get("DB_KEEPALIVES_IDLE", "30")),
+        keepalives_interval=int(os.environ.get("DB_KEEPALIVES_INTERVAL", "10")),
+        keepalives_count=int(os.environ.get("DB_KEEPALIVES_COUNT", "5")),
+    )
+
+
+def get_healthy_postgres_connection():
+    attempts = int(os.environ.get("DB_POOL_HEALTH_CHECK_ATTEMPTS", "2"))
+    last_error = None
+
+    for _ in range(max(1, attempts)):
+        connection = POSTGRES_POOL.getconn()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            connection.rollback()
+            return connection
+        except (psycopg2.InterfaceError, psycopg2.OperationalError) as error:
+            last_error = error
+            POSTGRES_POOL.putconn(connection, close=True)
+
+    raise last_error
+
+
 def is_placeholder_database_url(database_url):
     if not database_url:
         return False
@@ -296,19 +328,9 @@ def get_db_connection():
             raise RuntimeError("Invalid PostgreSQL DATABASE_URL")
 
         if POSTGRES_POOL is None:
-            POSTGRES_POOL = pool.ThreadedConnectionPool(
-                minconn=int(os.environ.get("DB_POOL_MIN", "1")),
-                maxconn=int(os.environ.get("DB_POOL_MAX", "5")),
-                dsn=DATABASE_URL,
-                connect_timeout=int(os.environ.get("DB_CONNECT_TIMEOUT", "5")),
-                sslmode=os.environ.get("DATABASE_SSLMODE", "require"),
-                keepalives=1,
-                keepalives_idle=30,
-                keepalives_interval=10,
-                keepalives_count=5,
-            )
+            POSTGRES_POOL = initialize_postgres_pool()
 
-        connection = POSTGRES_POOL.getconn()
+        connection = get_healthy_postgres_connection()
         return PostgresConnection(connection, POSTGRES_POOL)
 
     conn = sqlite3.connect(SQLITE_DATABASE)

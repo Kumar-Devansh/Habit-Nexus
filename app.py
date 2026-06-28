@@ -9,7 +9,8 @@ from flask import (
     url_for,
     flash,
     g,
-    abort
+    abort,
+    has_request_context
 )
 import requests
 import csv
@@ -30,7 +31,7 @@ datetime
 )
 
 from database import (
-    get_db_connection
+    get_db_connection as open_db_connection
 )
 import os
 from werkzeug.utils import secure_filename
@@ -64,6 +65,24 @@ os.makedirs(
     app.config["UPLOAD_FOLDER"],
     exist_ok=True
 )
+
+
+def get_db_connection():
+    conn = open_db_connection()
+    if has_request_context():
+        if not hasattr(g, "_db_connections"):
+            g._db_connections = []
+        g._db_connections.append(conn)
+    return conn
+
+
+@app.teardown_appcontext
+def close_request_db_connections(error=None):
+    for conn in g.pop("_db_connections", []):
+        try:
+            conn.close()
+        except Exception:
+            app.logger.exception("Failed to close database connection")
 
 ALLOWED_PROFILE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 ALLOWED_PROFILE_MIMES = {"image/png", "image/jpeg", "image/webp"}

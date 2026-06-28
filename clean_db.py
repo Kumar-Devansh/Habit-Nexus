@@ -1,5 +1,5 @@
 from database import get_db_connection, init_db, using_postgres
-
+# JAI SHREE RAM 
 
 init_db()
 conn = get_db_connection()

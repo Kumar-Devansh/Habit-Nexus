@@ -1,0 +1,48 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: habitnexus-web:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_SSLMODE: ${DATABASE_SSLMODE:-prefer}
+      DB_POOL_MIN: ${DB_POOL_MIN:-1}
+      DB_POOL_MAX: ${DB_POOL_MAX:-5}
+      DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT:-5}
+      DB_KEEPALIVES: ${DB_KEEPALIVES:-1}
+      DB_KEEPALIVES_IDLE: ${DB_KEEPALIVES_IDLE:-30}
+      DB_KEEPALIVES_INTERVAL: ${DB_KEEPALIVES_INTERVAL:-10}
+      DB_KEEPALIVES_COUNT: ${DB_KEEPALIVES_COUNT:-5}
+      DB_POOL_HEALTH_CHECK_ATTEMPTS: ${DB_POOL_HEALTH_CHECK_ATTEMPTS:-2}
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    volumes:
+      - profile_uploads:/app/static/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  postgres_data:
+  profile_uploads:

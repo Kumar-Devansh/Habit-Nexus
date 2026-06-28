@@ -138,6 +138,15 @@ Example:
 SECRET_KEY=your_secret_key
 
 DATABASE_URL=postgresql://username:password@localhost/database
+DATABASE_SSLMODE=prefer
+DB_POOL_MIN=1
+DB_POOL_MAX=5
+DB_CONNECT_TIMEOUT=5
+DB_KEEPALIVES=1
+DB_KEEPALIVES_IDLE=30
+DB_KEEPALIVES_INTERVAL=10
+DB_KEEPALIVES_COUNT=5
+DB_POOL_HEALTH_CHECK_ATTEMPTS=2
 
 SESSION_COOKIE_SECURE=False
 ```
@@ -163,7 +172,7 @@ python app.py
 ## 7. Run Production Server
 
 ```bash
-gunicorn -w 3 -b 127.0.0.1:8000 app:app
+gunicorn app:app --workers 2 --threads 4 --bind 127.0.0.1:8000 --timeout 120 --access-logfile -
 ```
 
 ---
@@ -193,7 +202,7 @@ Description=Habit Nexus
 User=ubuntu
 WorkingDirectory=/home/ubuntu/Habit_Nexus
 EnvironmentFile=/home/ubuntu/Habit_Nexus/.env
-ExecStart=/home/ubuntu/Habit_Nexus/venv/bin/gunicorn -w 3 -b 127.0.0.1:8000 app:app
+ExecStart=/home/ubuntu/Habit_Nexus/venv/bin/gunicorn app:app --workers 2 --threads 4 --bind 127.0.0.1:8000 --timeout 120 --access-logfile -
 Restart=always
 
 [Install]

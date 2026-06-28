@@ -262,6 +262,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     async function submitRoutineForm(form) {
         const submitButton = form.querySelector("button[type='submit']");
+        const formCsrfInput = form.querySelector("input[name='_csrf_token']");
         if (submitButton) submitButton.disabled = true;
         try {
             const response = await fetch(form.action, {
@@ -270,15 +271,17 @@ document.addEventListener("DOMContentLoaded", function () {
                 headers: {
                     "Accept": "application/json",
                     "X-Requested-With": "XMLHttpRequest",
-                    "X-CSRF-Token": csrfInput ? csrfInput.value : ""
+                    "X-CSRF-Token": formCsrfInput ? formCsrfInput.value : ""
                 }
             });
-            if (!response.ok) throw new Error("Request failed");
             const data = await response.json();
+            if (!response.ok || data.ok === false) {
+                throw new Error(data.message || "Request failed");
+            }
             renderRoutineState(data);
             if (form.dataset.routineAction === "add") form.reset();
         } catch (error) {
-            showRoutineMessage("Could not update routine. Please try again.", true);
+            showRoutineMessage(error.message || "Could not update routine. Please try again.", true);
         } finally {
             if (submitButton) submitButton.disabled = false;
         }
@@ -286,6 +289,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     async function submitDashboardNotificationForm(form) {
         const submitButton = form.querySelector("button[type='submit']");
+        const formCsrfInput = form.querySelector("input[name='_csrf_token']");
         if (submitButton) submitButton.disabled = true;
         try {
             const response = await fetch(form.action, {
@@ -294,18 +298,20 @@ document.addEventListener("DOMContentLoaded", function () {
                 headers: {
                     "Accept": "application/json",
                     "X-Requested-With": "XMLHttpRequest",
-                    "X-CSRF-Token": csrfInput ? csrfInput.value : ""
+                    "X-CSRF-Token": formCsrfInput ? formCsrfInput.value : ""
                 }
             });
-            if (!response.ok) throw new Error("Request failed");
             const data = await response.json();
+            if (!response.ok || data.ok === false) {
+                throw new Error(data.message || "Request failed");
+            }
             const popupCard = form.closest("#dashboardAiPopup");
             const stripCard = form.closest(".dashboard-notification-card");
             if (popupCard) popupCard.remove();
             if (stripCard) stripCard.remove();
             showRoutineMessage(data.message || "Notification removed.", false);
         } catch (error) {
-            showRoutineMessage("Could not remove notification. Please try again.", true);
+            showRoutineMessage(error.message || "Could not remove notification. Please try again.", true);
         } finally {
             if (submitButton) submitButton.disabled = false;
         }

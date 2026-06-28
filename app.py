@@ -2161,8 +2161,8 @@ def toggle(id):
         (id, log_date)
     ).fetchone()
 
-    current_status = int(existing_log["completed"]) if existing_log else 0
-    new_status = 0 if current_status else 1
+    current_status = bool(existing_log["completed"]) if existing_log else False
+    new_status = not current_status
 
     if existing_log:
 

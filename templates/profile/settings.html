@@ -1,0 +1,132 @@
+{% extends "layout/base.html" %}
+
+{% block content %}
+<main class="account-settings-page">
+    <header class="account-page-header">
+        <div><span>Account controls</span><h1>Settings and security</h1><p>Manage private sign-in details separately from your public student profile.</p></div>
+    </header>
+
+    <div class="settings-layout">
+        <aside class="settings-summary">
+            <img src="{{ profile_image_url(user) }}" alt="">
+            <h2 data-settings-username>{{ user.username }}</h2>
+            <p>{{ user.public_id }}</p>
+            <div><span>Private email</span><strong data-settings-email>{{ user.email }}</strong></div>
+            <a href="{{ url_for('profile') }}">Edit public profile</a>
+        </aside>
+
+        <div class="settings-forms">
+            <p class="account-action-message" data-settings-message hidden></p>
+
+            <form method="POST" class="account-form-card suggestion-card" data-settings-form>
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="suggestion">
+                <header><span>Suggestion</span><h2>Send feedback to developer</h2><p>Report a problem, request a feature, or suggest a smoother student workflow.</p></header>
+                <label><span>Your suggestion</span><textarea name="message" minlength="10" maxlength="1200" placeholder="Write what should improve and why it matters for students..." required></textarea></label>
+                <button type="submit">Send suggestion</button>
+            </form>
+
+            <form method="POST" class="account-form-card" data-settings-form>
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="account">
+                <header><span>Account identity</span><h2>Username and email</h2><p>Your current password is required to save these changes.</p></header>
+                <label><span>Username</span><input type="text" name="username" minlength="3" maxlength="30" value="{{ user.username }}" autocomplete="username" required></label>
+                <label><span>Email address</span><input type="email" name="email" value="{{ user.email }}" autocomplete="email" required></label>
+                <label><span>Current password</span><input type="password" name="current_password" autocomplete="current-password" required></label>
+                <button type="submit">Update account details</button>
+            </form>
+
+            <form method="POST" class="account-form-card security-card" data-settings-form>
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="password">
+                <header><span>Security</span><h2>Change password</h2><p>Use at least eight characters and choose a new password.</p></header>
+                <label><span>Current password</span><input type="password" name="current_password" autocomplete="current-password" required></label>
+                <div class="account-field-grid">
+                    <label><span>New password</span><input type="password" name="new_password" minlength="8" autocomplete="new-password" required></label>
+                    <label><span>Confirm new password</span><input type="password" name="confirm_password" minlength="8" autocomplete="new-password" required></label>
+                </div>
+                <button type="submit">Change password</button>
+            </form>
+
+            <form method="POST" class="account-form-card danger-card" data-settings-form>
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="delete_data">
+                <header><span>Data reset</span><h2>Delete all app data</h2><p>This removes routines, DSA history, friends, requests, activities, notifications, and challenges while keeping your login/profile.</p></header>
+                <label><span>Current password</span><input type="password" name="current_password" autocomplete="current-password" required></label>
+                <label><span>Type DELETE DATA</span><input type="text" name="confirmation" autocomplete="off" required></label>
+                <button type="submit">Delete my app data</button>
+            </form>
+
+            <form method="POST" class="account-form-card danger-card danger-card-strong" data-settings-form>
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="delete_account">
+                <header><span>Profile deletion</span><h2>Delete account and profile</h2><p>This permanently removes your user account, profile, friends, requests, and all HabitNexus data.</p></header>
+                <label><span>Current password</span><input type="password" name="current_password" autocomplete="current-password" required></label>
+                <label><span>Type DELETE ACCOUNT</span><input type="text" name="confirmation" autocomplete="off" required></label>
+                <button type="submit">Delete my account</button>
+            </form>
+        </div>
+    </div>
+</main>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const message = document.querySelector("[data-settings-message]");
+
+    function showMessage(text, isError) {
+        if (!message || !text) return;
+        message.textContent = text;
+        message.hidden = false;
+        message.classList.toggle("is-error", Boolean(isError));
+        window.clearTimeout(showMessage.timer);
+        showMessage.timer = window.setTimeout(function () {
+            message.hidden = true;
+        }, 3200);
+    }
+
+    function updateIdentity(data) {
+        if (!data.username && !data.email) return;
+        document.querySelectorAll("[data-settings-username], .sidebar-account strong, .navbar-user strong").forEach(function (node) {
+            if (data.username) node.textContent = data.username;
+        });
+        const email = document.querySelector("[data-settings-email]");
+        if (email && data.email) email.textContent = data.email;
+    }
+
+    document.addEventListener("submit", async function (event) {
+        const form = event.target.closest("[data-settings-form]");
+        if (!form) return;
+        event.preventDefault();
+        const button = form.querySelector("button[type='submit']");
+        if (button) button.disabled = true;
+        try {
+            const response = await fetch(form.action || window.location.href, {
+                method: "POST",
+                body: new FormData(form),
+                headers: {
+                    "Accept": "application/json",
+                    "X-Requested-With": "XMLHttpRequest"
+                }
+            });
+            const data = await response.json();
+            if (data.redirect_url) {
+                window.location.href = data.redirect_url;
+                return;
+            }
+            showMessage(data.message || "Settings updated.", !data.ok);
+            if (data.ok) {
+                updateIdentity(data);
+                if (data.action === "suggestion" || data.action === "password") {
+                    form.reset();
+                } else {
+                    form.querySelectorAll("input[type='password'], input[name='confirmation']").forEach(input => input.value = "");
+                }
+            }
+        } catch (error) {
+            showMessage("Could not update settings. Please try again.", true);
+        } finally {
+            if (button) button.disabled = false;
+        }
+    });
+});
+</script>
+{% endblock %}

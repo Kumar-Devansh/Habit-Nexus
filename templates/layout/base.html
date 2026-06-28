@@ -1,0 +1,110 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <title>
+        HabitNexus
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for(
+            'static',
+            filename='css/style.css'
+        ) }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for(
+            'static',
+            filename='css/dsa.css'
+        ) }}"
+    >
+    
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/friends.css') }}"
+    >
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/calendar.css') }}"
+    >
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/account.css') }}">
+
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.49.1/dist/apexcharts.min.js"></script>
+    {% block extra_css %}
+    {% endblock %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/readability.css') }}">
+
+</head>
+
+<body class="app-shell">
+
+    {% if current_user %}
+        {% include 'layout/sidebar.html' %}
+        <button type="button" class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Close navigation"></button>
+    {% endif %}
+
+    <div class="main-content {% if not current_user %}without-sidebar{% endif %}">
+
+        {% if current_user %}{% include 'layout/navbar.html' %}{% endif %}
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-stack" role="status">
+                {% for category, message in messages %}<div class="flash-message flash-{{ category }}">{{ message }}</div>{% endfor %}
+            </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="page-content">
+
+            {% block content %}
+            {% endblock %}
+
+        </div>
+
+        {% include 'layout/footer.html' %}
+
+    </div>
+
+    <script
+        src="{{ url_for(
+            'static',
+            filename='js/theme.js'
+        ) }}"
+    ></script>
+
+    <script
+        src="{{ url_for(
+            'static',
+            filename='js/charts.js'
+        ) }}"
+    ></script>
+    <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+    <script>
+    document.addEventListener("error", function (event) {
+        const image = event.target;
+        if (!image || image.tagName !== "IMG" || image.dataset.fallbackApplied) return;
+        image.dataset.fallbackApplied = "1";
+        image.alt = "";
+        image.src = "{{ url_for('static', filename='images/default-avatar.svg') }}";
+    }, true);
+    </script>
+
+</body>
+
+</html>

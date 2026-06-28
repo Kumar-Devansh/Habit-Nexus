@@ -1,0 +1,344 @@
+{% extends "layout/base.html" %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<main class="student-dashboard">
+    <header class="dashboard-header dashboard-enter">
+        <div>
+            <span class="dashboard-kicker">{{ today_label }}</span>
+            <h1>Welcome back, {{ user.username }}.</h1>
+            <p>{% if is_today %}Keep today small, clear, and complete.{% else %}Review and adjust the saved routine state for this day.{% endif %}</p>
+        </div>
+        <div class="dashboard-date-actions">
+            <a href="{{ url_for('dashboard', date=previous_day) }}" class="dashboard-header-link">Previous day</a>
+            {% if not is_today %}<a href="{{ url_for('dashboard') }}" class="dashboard-header-link">Today</a>{% endif %}
+            <a href="{{ url_for('dashboard', date=next_day) }}" class="dashboard-header-link">Next day</a>
+            <a href="{{ url_for('calendar') }}" class="dashboard-header-link">Review calendar</a>
+        </div>
+    </header>
+
+    {% if pinned_notifications or ai_notifications %}
+    <section class="dashboard-notification-strip dashboard-enter" aria-label="Notifications">
+        {% for note in pinned_notifications %}
+        <article class="dashboard-notification-card is-pinned"><span>Developer pin</span><strong>{{ note.title }}</strong><p>{{ note.message }}</p><small>Managed by developer</small></article>
+        {% endfor %}
+        {% for note in ai_notifications %}
+        <article class="dashboard-notification-card is-ai">
+            <span>{{ note.kind }}</span>
+            <strong>{{ note.title }}</strong>
+            <p>{{ note.message }}</p>
+            <form method="POST" action="{{ url_for('dismiss_ai_notification') }}" class="notification-remove-form" data-dashboard-notification-action="dismiss">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="notification_key" value="{{ note.key }}">
+                <input type="hidden" name="next" value="{{ url_for('dashboard', date=selected_date) if not is_today else url_for('dashboard') }}">
+                <button type="submit">Remove AI notification</button>
+            </form>
+        </article>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    <section class="dashboard-summary-grid dashboard-enter" aria-label="Today summary">
+        <article><span>Today</span><strong data-dashboard-stat="completed-total">{{ completed }}/{{ total }}</strong><small data-dashboard-stat="progress-copy">{{ progress }}% of routines complete</small></article>
+        <article><span>Still to do</span><strong data-dashboard-stat="pending">{{ pending }}</strong><small data-dashboard-stat="pending-copy">{% if pending %}Keep the next action simple{% else %}Daily plan completed{% endif %}</small></article>
+        <article><span>Full-day streak</span><strong data-dashboard-stat="streak">{{ streak }} days</strong><small>Every active routine completed</small></article>
+        <article><span>LeetCode solved</span><strong>{{ leetcode_total }}</strong><small>{{ dsa_completed }} / {{ dsa_target }} roadmap problems</small></article>
+    </section>
+
+    <section class="dashboard-focus dashboard-enter">
+        <div data-dashboard-focus>
+            <span class="dashboard-kicker">Next action</span>
+            {% if focus_task %}
+            <h2 data-dashboard-focus-title>{{ focus_task.task_name }}</h2>
+            <p data-dashboard-focus-copy>Complete one unfinished routine now. Momentum usually begins with the smallest visible step.</p>
+            {% elif total %}
+            <h2 data-dashboard-focus-title>Today is complete.</h2>
+            <p data-dashboard-focus-copy>Your full routine is checked off. Review progress or prepare tomorrow without adding unnecessary work.</p>
+            {% else %}
+            <h2 data-dashboard-focus-title>Create your first daily routine.</h2>
+            <p data-dashboard-focus-copy>Start with one repeatable action that supports study, health, or interview preparation.</p>
+            {% endif %}
+        </div>
+        <div class="dashboard-progress-ring" style="--dashboard-progress: {{ progress }}"><strong data-dashboard-stat="progress">{{ progress }}%</strong><span>today</span></div>
+    </section>
+
+    <div class="dashboard-main-grid">
+        <section class="dashboard-panel dashboard-enter">
+            <div class="dashboard-panel-heading"><div><span class="dashboard-kicker">Daily system</span><h2>Today's routines</h2></div><small data-dashboard-stat="panel-complete">{{ completed }} complete</small></div>
+            <form action="{{ url_for('add_routine') }}" method="POST" class="dashboard-add-form" data-routine-action="add">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="selected_date" value="{{ selected_date }}">
+                <input type="text" name="task" maxlength="100" placeholder="Add a clear, repeatable routine" required>
+                <button type="submit">Add routine</button>
+            </form>
+
+            <p class="dashboard-routine-message" data-routine-message hidden></p>
+            <div class="dashboard-routine-list" data-routine-list {% if not routines %}hidden{% endif %}>
+                {% if routines %}
+                {% for routine in routines %}
+                <article class="dashboard-routine {% if routine.completed %}is-complete{% endif %}" data-routine-id="{{ routine.id }}">
+                    <form action="{{ url_for('toggle', id=routine.id) }}" method="POST" data-routine-action="toggle">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="selected_date" value="{{ selected_date }}">
+                        <button type="submit" class="dashboard-check" aria-label="{{ 'Mark incomplete' if routine.completed else 'Mark complete' }}">{% if routine.completed %}<span></span>{% endif %}</button>
+                    </form>
+                    <div><strong>{{ routine.task_name }}</strong><span>{{ 'Completed for this day' if routine.completed else 'Not completed for this day' }}</span></div>
+                    <form action="{{ url_for('delete', id=routine.id) }}" method="POST" data-routine-action="delete">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="selected_date" value="{{ selected_date }}">
+                        <button type="submit" class="dashboard-delete">Delete</button>
+                    </form>
+                </article>
+                {% endfor %}
+                {% endif %}
+            </div>
+            <div class="dashboard-empty" data-routine-empty {% if routines %}hidden{% endif %}><strong>No routines yet</strong><span>Add one useful action above to begin tracking.</span></div>
+        </section>
+
+        <aside class="dashboard-side-stack">
+            <section class="dashboard-panel dashboard-enter">
+                <div class="dashboard-panel-heading"><div><span class="dashboard-kicker">Last 7 days</span><h2>Completion trend</h2></div></div>
+                <div id="dashboardWeekChart" class="dashboard-chart"></div>
+            </section>
+
+            <section class="dashboard-panel dashboard-enter">
+                <div class="dashboard-panel-heading"><div><span class="dashboard-kicker">Community</span><h2>Your network</h2></div></div>
+                <div class="dashboard-network-stats"><div><strong>{{ friend_count }}</strong><span>Friends</span></div><div><strong>{{ active_challenges }}</strong><span>Active challenges</span></div></div>
+                <div class="dashboard-link-list">
+                    <a href="{{ url_for('friends_hub') }}">Open friends hub</a>
+                    <a href="{{ url_for('leaderboard') }}">View weekly leaderboard</a>
+                    <a href="{{ url_for('dsa_tracker') }}">Update DSA roadmap</a>
+                    <a href="{{ url_for('analytics') }}">Review analytics</a>
+                </div>
+            </section>
+        </aside>
+    </div>
+</main>
+
+{% if ai_notifications %}
+<div class="dashboard-ai-popup" id="dashboardAiPopup" role="status" aria-live="polite">
+    <button type="button" aria-label="Close notification" id="dashboardAiClose">×</button>
+    <span>AI study coach</span>
+    <strong>{{ ai_notifications[0].title }}</strong>
+    <p>{{ ai_notifications[0].message }}</p>
+    <form method="POST" action="{{ url_for('dismiss_ai_notification') }}" class="notification-remove-form" data-dashboard-notification-action="dismiss">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="notification_key" value="{{ ai_notifications[0].key }}">
+        <input type="hidden" name="next" value="{{ url_for('dashboard', date=selected_date) if not is_today else url_for('dashboard') }}">
+        <button type="submit">Remove for today</button>
+    </form>
+</div>
+{% endif %}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const popup = document.getElementById("dashboardAiPopup");
+    const close = document.getElementById("dashboardAiClose");
+    if (popup && close) {
+        const key = "habitnexus-ai-popup-{{ selected_date }}";
+        if (sessionStorage.getItem(key)) popup.hidden = true;
+        close.addEventListener("click", function () {
+            popup.hidden = true;
+            sessionStorage.setItem(key, "closed");
+        });
+    }
+
+    const routineList = document.querySelector("[data-routine-list]");
+    const routineEmpty = document.querySelector("[data-routine-empty]");
+    const routineMessage = document.querySelector("[data-routine-message]");
+    const addForm = document.querySelector("[data-routine-action='add']");
+    const csrfInput = addForm ? addForm.querySelector("input[name='_csrf_token']") : null;
+    const selectedDateInput = addForm ? addForm.querySelector("input[name='selected_date']") : null;
+    const toggleUrlBase = "{{ url_for('toggle', id=0) }}".replace(/0$/, "");
+    const deleteUrlBase = "{{ url_for('delete', id=0) }}".replace(/0$/, "");
+
+    function setText(selector, value) {
+        const element = document.querySelector(selector);
+        if (element) element.textContent = value;
+    }
+
+    function showRoutineMessage(message, isError) {
+        if (!routineMessage || !message) return;
+        routineMessage.textContent = message;
+        routineMessage.hidden = false;
+        routineMessage.classList.toggle("is-error", Boolean(isError));
+        window.clearTimeout(showRoutineMessage.timer);
+        showRoutineMessage.timer = window.setTimeout(function () {
+            routineMessage.hidden = true;
+        }, 2600);
+    }
+
+    function createHiddenInput(name, value) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = name;
+        input.value = value;
+        return input;
+    }
+
+    function createRoutineCard(routine) {
+        const card = document.createElement("article");
+        card.className = "dashboard-routine" + (routine.completed ? " is-complete" : "");
+        card.dataset.routineId = routine.id;
+
+        const toggleForm = document.createElement("form");
+        toggleForm.method = "POST";
+        toggleForm.action = toggleUrlBase + routine.id;
+        toggleForm.dataset.routineAction = "toggle";
+        toggleForm.appendChild(createHiddenInput("_csrf_token", csrfInput ? csrfInput.value : ""));
+        toggleForm.appendChild(createHiddenInput("selected_date", selectedDateInput ? selectedDateInput.value : ""));
+
+        const checkButton = document.createElement("button");
+        checkButton.type = "submit";
+        checkButton.className = "dashboard-check";
+        checkButton.setAttribute("aria-label", routine.completed ? "Mark incomplete" : "Mark complete");
+        if (routine.completed) checkButton.appendChild(document.createElement("span"));
+        toggleForm.appendChild(checkButton);
+
+        const copy = document.createElement("div");
+        const title = document.createElement("strong");
+        title.textContent = routine.task_name;
+        const status = document.createElement("span");
+        status.textContent = routine.completed ? "Completed for this day" : "Not completed for this day";
+        copy.appendChild(title);
+        copy.appendChild(status);
+
+        const deleteForm = document.createElement("form");
+        deleteForm.method = "POST";
+        deleteForm.action = deleteUrlBase + routine.id;
+        deleteForm.dataset.routineAction = "delete";
+        deleteForm.appendChild(createHiddenInput("_csrf_token", csrfInput ? csrfInput.value : ""));
+        deleteForm.appendChild(createHiddenInput("selected_date", selectedDateInput ? selectedDateInput.value : ""));
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "submit";
+        deleteButton.className = "dashboard-delete";
+        deleteButton.textContent = "Delete";
+        deleteForm.appendChild(deleteButton);
+
+        card.appendChild(toggleForm);
+        card.appendChild(copy);
+        card.appendChild(deleteForm);
+        return card;
+    }
+
+    function renderRoutineState(data) {
+        setText("[data-dashboard-stat='completed-total']", data.completed + "/" + data.total);
+        setText("[data-dashboard-stat='progress-copy']", data.progress + "% of routines complete");
+        setText("[data-dashboard-stat='pending']", data.pending);
+        setText("[data-dashboard-stat='pending-copy']", data.pending ? "Keep the next action simple" : "Daily plan completed");
+        setText("[data-dashboard-stat='streak']", data.streak + " days");
+        setText("[data-dashboard-stat='progress']", data.progress + "%");
+        setText("[data-dashboard-stat='panel-complete']", data.completed + " complete");
+
+        const progressRing = document.querySelector(".dashboard-progress-ring");
+        if (progressRing) progressRing.style.setProperty("--dashboard-progress", data.progress);
+
+        const focusTitle = document.querySelector("[data-dashboard-focus-title]");
+        const focusCopy = document.querySelector("[data-dashboard-focus-copy]");
+        if (focusTitle && focusCopy) {
+            if (data.focus_task) {
+                focusTitle.textContent = data.focus_task.task_name;
+                focusCopy.textContent = "Complete one unfinished routine now. Momentum usually begins with the smallest visible step.";
+            } else if (data.total) {
+                focusTitle.textContent = "Today is complete.";
+                focusCopy.textContent = "Your full routine is checked off. Review progress or prepare tomorrow without adding unnecessary work.";
+            } else {
+                focusTitle.textContent = "Create your first daily routine.";
+                focusCopy.textContent = "Start with one repeatable action that supports study, health, or interview preparation.";
+            }
+        }
+
+        if (routineList) {
+            routineList.replaceChildren(...data.routines.map(createRoutineCard));
+            routineList.hidden = !data.routines.length;
+        }
+        if (routineEmpty) routineEmpty.hidden = Boolean(data.routines.length);
+        if (data.message) showRoutineMessage(data.message, false);
+    }
+
+    async function submitRoutineForm(form) {
+        const submitButton = form.querySelector("button[type='submit']");
+        if (submitButton) submitButton.disabled = true;
+        try {
+            const response = await fetch(form.action, {
+                method: "POST",
+                body: new FormData(form),
+                headers: {
+                    "Accept": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-CSRF-Token": csrfInput ? csrfInput.value : ""
+                }
+            });
+            if (!response.ok) throw new Error("Request failed");
+            const data = await response.json();
+            renderRoutineState(data);
+            if (form.dataset.routineAction === "add") form.reset();
+        } catch (error) {
+            showRoutineMessage("Could not update routine. Please try again.", true);
+        } finally {
+            if (submitButton) submitButton.disabled = false;
+        }
+    }
+
+    async function submitDashboardNotificationForm(form) {
+        const submitButton = form.querySelector("button[type='submit']");
+        if (submitButton) submitButton.disabled = true;
+        try {
+            const response = await fetch(form.action, {
+                method: "POST",
+                body: new FormData(form),
+                headers: {
+                    "Accept": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-CSRF-Token": csrfInput ? csrfInput.value : ""
+                }
+            });
+            if (!response.ok) throw new Error("Request failed");
+            const data = await response.json();
+            const popupCard = form.closest("#dashboardAiPopup");
+            const stripCard = form.closest(".dashboard-notification-card");
+            if (popupCard) popupCard.remove();
+            if (stripCard) stripCard.remove();
+            showRoutineMessage(data.message || "Notification removed.", false);
+        } catch (error) {
+            showRoutineMessage("Could not remove notification. Please try again.", true);
+        } finally {
+            if (submitButton) submitButton.disabled = false;
+        }
+    }
+
+    document.addEventListener("submit", function (event) {
+        const form = event.target.closest("[data-routine-action]");
+        if (!form) return;
+        event.preventDefault();
+        submitRoutineForm(form);
+    });
+
+    document.addEventListener("submit", function (event) {
+        const form = event.target.closest("[data-dashboard-notification-action]");
+        if (!form) return;
+        event.preventDefault();
+        submitDashboardNotificationForm(form);
+    });
+
+    if (!window.ApexCharts) return;
+    const textColor = getComputedStyle(document.body).getPropertyValue("--muted").trim() || "#94a3b8";
+    const gridColor = getComputedStyle(document.body).getPropertyValue("--border").trim() || "#334155";
+    new ApexCharts(document.querySelector("#dashboardWeekChart"), {
+        series: [{ name: "Completion", data: {{ weekly_rates|tojson }} }],
+        chart: { type: "bar", height: 245, toolbar: { show: false }, animations: { enabled: true, speed: 650 } },
+        colors: ["#6366f1"],
+        plotOptions: { bar: { borderRadius: 5, columnWidth: "52%" } },
+        dataLabels: { enabled: false },
+        xaxis: { categories: {{ weekly_labels|tojson }}, labels: { style: { colors: textColor, fontSize: "10px" } } },
+        yaxis: { min: 0, max: 100, labels: { style: { colors: textColor }, formatter: value => Math.round(value) + "%" } },
+        grid: { borderColor: gridColor, strokeDashArray: 4 },
+        tooltip: { theme: document.body.classList.contains("light-mode") ? "light" : "dark", y: { formatter: value => value + "% complete" } }
+    }).render();
+});
+</script>
+{% endblock %}

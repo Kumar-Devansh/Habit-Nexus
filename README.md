@@ -409,7 +409,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 # 👨‍💻 Author
 
-**Devansh Kumar**
+** Kumar Devansh**
 
 GitHub
 

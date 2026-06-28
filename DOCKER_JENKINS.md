@@ -84,7 +84,7 @@ Open the app through Nginx or directly while testing:
 curl http://127.0.0.1:8000
 ```
 
-## 4. Nginx Reverse Proxy
+## 4. Nginx Reverse Proxy 
 
 Keep Nginx on port `80` and proxy to the app container port:
 
@@ -137,6 +137,9 @@ Create a Pipeline job:
 3. Enter your repository URL.
 4. Set branch, for example `main`.
 5. Script path: `Jenkinsfile`.
+
+
+// Till here we are done 
 
 The pipeline will:
 
